@@ -59,12 +59,6 @@ python client.py http://localhost:8080/mcp/
 - Run: `python server.py`
 - Connect: `python client.py http://localhost:8080/mcp/`
 
-### 2. TechNova Customer Support Server (if available)
-- Full customer support tools
-- Resources for logs
-- Prompts for issue summaries
-- Deployed at: `https://technova-mcp-server-324351717986.us-central1.run.app/mcp/`
-
 ## Client Features
 
 ### Natural Language Queries
@@ -96,13 +90,13 @@ python client.py http://localhost:8080/mcp/ --debug
 ## Architecture
 
 ```
-┌─────────────────┐         HTTP/SSE          ┌─────────────────┐
-│                 │  ────────────────────────> │                 │
+┌─────────────────┐         HTTP+SSE           ┌─────────────────┐
+│  Custom         │  ────────────────────────> │                 │
 │  Client         │                            │  MCP Server     │
-│  (client.py)    │  <────────────────────────  │  (server.py)    │
+│  (client.py)    │  <──────────────────────── │  (server.py)    │
 │                 │                            │                 │
 └─────────────────┘                            └─────────────────┘
-      │                                               │
+      │                                              │
       │ Uses Google Gemini                           │ Uses FastMCP
       │ for LLM calls                                │ framework
       └─────────────────                             └─────────────
