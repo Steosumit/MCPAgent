@@ -2,7 +2,6 @@
 In this file we are going to make a simple client to help us connect to the MCP server
 1. we use exit_stack to manage opening and closing of the streamable http connections
 """
-import asyncio
 from mcp import ClientSession  # client sessions
 from mcp.client.streamable_http import streamablehttp_client  # http sse transport
 from contextlib import AsyncExitStack  # context management
@@ -17,16 +16,18 @@ load_dotenv()  # load environment variables from .env file
 class Client:
     def __init__(self):
         self.exit_stack = AsyncExitStack()
-        self.anthropic = Anthropic()
         self.available_tools = []
         self.sessions = {}
-        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+        self.session = None # global session
+        self.prompts = {}
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0)
         self.connected = False  # Track connection state
 
     async def connect_to_server(self, server_url: str):
         transport = await self.exit_stack.enter_async_context(streamablehttp_client(server_url))  # layer 1: it has only the http raw transport line
         read, write, _ = transport
-        session = await self.exit_stack.enter_async_context(ClientSession(read, write))  # layer 2: it adds mcp logic to transport pipeline
+        session: ClientSession = await self.exit_stack.enter_async_context(ClientSession(read, write))  # layer 2: it adds mcp logic to transport pipeline
+        self.session = session  # Store session for later use
         await session.initialize()  # handshake
         self.connected = True  # Successfully connected
 
@@ -53,11 +54,19 @@ class Client:
         except Exception as e:
             print(f"[RESOURCE] Error in discovering resources: {e}")
 
+        # discovering prompts
+        try:
+            response = await session.list_prompts()
+            #print(response)
+            for prompt in response.prompts:
+                print(f"[PROMPT] Discovered prompts: {prompt.name} - {prompt.description}")
+        except Exception as e:
+            print(f"[PROMPT] Error in discovering prompts: {e}")
+
     # get resources
     async def get_resource(self, resource_uri):
-        """Get resource - handles dynamic URIs like your chatbot example"""
-
-        session = self.sessions.get(resource_uri)
+        """Get resource - get and list the resources given by the MCP server"""
+        session = self.sessions.get(resource_uri)  # resource session
         try:
             print(f"[GET] Reading: {resource_uri}")
             result = await session.read_resource(uri=resource_uri)
@@ -68,6 +77,22 @@ class Client:
                 print("=" * 60)
             else:
                 print("No content available.")
+        except Exception as e:
+            print(f"[GET RESOURCE] Error: {e}")
+
+    # get and apply prompts
+    async def get_prompts(self, *args) -> str:
+        """Get prompts - get and use the prompts given by the MCP server"""
+        try:
+            print(f"[GET] Reading: {args}")
+            response = await self.session.get_prompt("calculator_prompt", {"a": str(args[1]), "b": str(args[2])})
+            if response is None:
+                print("No prompt content available.")
+                return
+            else:
+                prompt = response.messages[0].content.text
+                result = await self.process_query(prompt)
+                print(result)
         except Exception as e:
             print(f"[GET RESOURCE] Error: {e}")
 
@@ -128,13 +153,16 @@ class Client:
         print("  @logs / @app             - Application logs (static)")
         print("  @customer_ACM001         - Customer logs (dynamic!)")
         print("  @list                    - List all available resources")
+        print("  @calc                    - Use calculator prompt template")
         print("  help                     - Show this help")
         print("  quit                     - Exit")
-        print("  Or just ask questions naturally!")
+        print("  Or just ask questions naturally!\n")
+        print("=" * 60)
 
         while True:
             try:
-                query = input("\nUser Query: ").strip()
+                query_list = input("\nUser Query: ").split(' ')
+                query = query_list[0]
                 if not query:
                     continue
 
@@ -146,6 +174,7 @@ class Client:
                     print("  @logs / @app / @application  - Get application logs (static)")
                     print("  @customer_<ID>               - Get customer logs (e.g., @customer_ACM001)")
                     print("  @list                        - List all available resources")
+                    print("  @calc                    - Use calculator prompt template")
                     print("  Natural language             - Ask anything and tools will be used automatically")
                     print("\n🔧 Available Tools:")
                     for tool in self.available_tools:
@@ -155,20 +184,20 @@ class Client:
                 # Handle @ syntax for resources (like your chatbot!)
                 if query.startswith('@'):
                     resource_name = query[1:]
-
                     # Special commands
                     if resource_name == "list":
                         await self.list_resources()
                         continue
-
+                    if resource_name == "calc" and len(query_list) == 3:
+                        await self.get_prompts("calculator_prompt", int(query_list[1]), int(query_list[2]))
+                        continue
                     # Map common names to URIs
                     if resource_name in ["logs"]:
                         resource_uri = "file:///logs.txt"
                     else:
                         resource_uri = resource_name
 
-                    content = await self.get_resource(resource_uri)
-                    print(f"Resource read : {content}")
+                    await self.get_resource(resource_uri)
                     continue
 
                 # Process as natural language
@@ -196,7 +225,6 @@ async def main():
         print("Usage: python client.py <server_url>")
         print()
         print("Examples:")
-        print("  python client.py https://technova-mcp-server-324351717986.us-central1.run.app/mcp/")
         print("  python client.py https://your-server.com/mcp/")
         print()
         print("💡 Make sure the URL ends with /mcp/ (with trailing slash)")

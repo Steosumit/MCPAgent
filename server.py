@@ -22,6 +22,11 @@ async def get_logs() -> str:
         logs = file.read()
     return logs
 
+@mcp.prompt(name="calculator_prompt", description="A prompt to properly format the calculator output", tags=["calculator", "sum", "add"])
+def prompt_calculator(a: int, b: int) -> str:
+    """A prompt to format the calculator output"""
+    return f"Find the sum of {a} and {b} and strictly output the result in the following format: {a} + {b} = <result>"
+
 if __name__ == "__main__":
     print("Starting MCP Calculator Server...")
     mcp.run(
