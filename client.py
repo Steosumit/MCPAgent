@@ -56,6 +56,7 @@ class Client:
     # get resources
     async def get_resource(self, resource_uri):
         """Get resource - handles dynamic URIs like your chatbot example"""
+
         session = self.sessions.get(resource_uri)
         try:
             print(f"[GET] Reading: {resource_uri}")
@@ -80,15 +81,11 @@ class Client:
                 static_resources.append(uri)
 
         if static_resources:
-            print("Static Resources:")
+            print("Static Resources Found:")
             for uri in sorted(static_resources):
                 print(f"  • {uri}")
 
         # Show dynamic resource patterns
-        print("\nDynamic Resource Patterns:")
-        print("  • file:///logs/customer_{customer_id}.log")
-        print("    Examples: @customer_ACM001, @customer_GLX002, @customer_UMB003")
-
         print("\nQuick Access:")
         print("  • @logs, @app, @application  → Application logs")
         print("  • @customer_<ID>             → Customer logs")
@@ -165,12 +162,13 @@ class Client:
                         continue
 
                     # Map common names to URIs
-                    if resource_name in ["logs", "app", "application"]:
-                        resource_uri = "file:///logs/app.log"
+                    if resource_name in ["logs"]:
+                        resource_uri = "file:///logs.txt"
                     else:
                         resource_uri = resource_name
 
-                    await self.get_resource(resource_uri)
+                    content = await self.get_resource(resource_uri)
+                    print(f"Resource read : {content}")
                     continue
 
                 # Process as natural language
